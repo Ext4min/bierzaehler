@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍺</text></svg>">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Bierzähler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Figtree:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+/* Layout: one column like a bar tab — upload strip, week stepper, scoreboard + chat-ready message side by side on wide screens */
+:root{
+  --bg:#F5F6F1; --surface:#FFFFFF; --ink:#16291C; --muted:#5C6B5F; --line:#D9DED4;
+  --amber:#C97C00; --amber-soft:#FBEBC8; --foam:#FFFDF6; --warn:#B4451F; --warn-soft:#F8E1D7;
+  --gold:#C99A06; --silver:#8A949A; --bronze:#A8633A;
+  --display:"Big Shoulders Display", Impact, "Arial Narrow", sans-serif;
+  --body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1711; --surface:#15221A; --ink:#EEEADC; --muted:#9BA89D; --line:#283A2E;
+  --amber:#F2A81D; --amber-soft:#3A2C0C; --foam:#1B2A20; --warn:#F08A62; --warn-soft:#3B1E14;
+  --gold:#E8BC2C; --silver:#B5BEC3; --bronze:#D08A5E; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1711; --surface:#15221A; --ink:#EEEADC; --muted:#9BA89D; --line:#283A2E;
+  --amber:#F2A81D; --amber-soft:#3A2C0C; --foam:#1B2A20; --warn:#F08A62; --warn-soft:#3B1E14;
+  --gold:#E8BC2C; --silver:#B5BEC3; --bronze:#D08A5E; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1040px;margin:0 auto;padding-inline:16px;padding-block:28px 56px;display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--display);font-weight:900;font-size:clamp(44px,9vw,76px);line-height:.9;margin:0;letter-spacing:.01em;text-transform:uppercase}
+h1 span{color:var(--amber)}
+.sub{margin:6px 0 0;color:var(--muted);max-width:60ch}
+h2{font-family:var(--display);font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.03em;margin:0;text-wrap:balance}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:700}
+.drop{border:2px dashed var(--line);border-radius:14px;padding:18px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;background:var(--surface);transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--amber);background:var(--amber-soft)}
+.drop p{margin:0;min-width:0;flex:1 1 280px}
+.btn{font:inherit;font-weight:700;border:0;border-radius:999px;padding:10px 18px;cursor:pointer;background:var(--ink);color:var(--bg)}
+.btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.btn:focus-visible,.step:focus-visible,input:focus-visible+.sw{outline:3px solid var(--amber);outline-offset:2px}
+.status{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;background:var(--amber-soft);color:var(--amber)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.weekbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.step{font:inherit;font-size:20px;line-height:1;width:40px;height:40px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.step:disabled{opacity:.35;cursor:default}
+.weekname{font-family:var(--display);font-weight:900;font-size:34px;text-transform:uppercase;line-height:1}
+.weekdates{color:var(--muted);font-family:var(--mono);font-size:13px}
+.main{display:flex;flex-direction:column;gap:22px}
+.howbox{border-top:0;padding-top:0;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.fact{border-top:3px solid var(--amber);padding-top:8px;min-width:0}
+.fact b{display:block;font-family:var(--display);font-size:34px;line-height:1;font-weight:900}
+.fact small{color:var(--muted);font-size:12px}
+.board{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center}
+.rank{font-family:var(--display);font-weight:900;font-size:24px;text-align:center;color:var(--muted)}
+.row.r1 .rank{color:var(--gold)} .row.r2 .rank{color:var(--silver)} .row.r3 .rank{color:var(--bronze)}
+.who{min-width:0}
+.who .n{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track{height:10px;border-radius:5px;background:var(--foam);border:1px solid var(--line);overflow:hidden;margin-top:3px}
+.fill{height:100%;background:var(--amber);border-radius:5px 0 0 5px}
+.row.r1 .fill{background:linear-gradient(90deg,var(--amber),var(--gold))}
+.cnt{font-family:var(--mono);font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;min-width:3ch;text-align:right}
+.empty{color:var(--muted);margin:0}
+.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;align-items:end;height:90px}
+.day{display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;min-width:0}
+.day .bar{width:70%;background:var(--amber);border-radius:4px 4px 0 0;min-height:2px}
+.day .bar.zero{background:var(--line)}
+.day small{font-size:11px;color:var(--muted)}
+.day .v{font-family:var(--mono);font-size:11px}
+.msg{font-family:var(--mono);font-size:13px;white-space:pre-wrap;word-break:break-word;background:var(--foam);border:1px solid var(--line);border-radius:12px;padding:14px;margin:0;max-height:420px;overflow:auto}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.toast{font-size:13px;color:var(--amber);font-weight:700}
+.opts{display:flex;flex-direction:column;gap:10px}
+.opt{display:flex;gap:10px;align-items:flex-start;font-size:14px;cursor:pointer}
+.opt input{position:absolute;opacity:0}
+.sw{flex:none;width:36px;height:20px;border-radius:10px;background:var(--line);position:relative;transition:background .15s;margin-top:1px}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--surface);transition:left .15s}
+.opt input:checked+.sw{background:var(--amber)}
+.opt input:checked+.sw::after{left:18px}
+.issues{margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:700}
+.how{margin:10px 0 0;padding-left:20px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto}
+@media (max-width:480px){.facts{grid-template-columns:repeat(3,minmax(0,1fr))}.fact b{font-size:26px}.weekname{font-size:28px}}
+.gate{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding-inline:16px;padding-block:24px}
+.gatebox{width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px}
+.gatebox h1{font-size:clamp(44px,15vw,62px)}
+.gatebox p{margin:0;color:var(--muted)}
+.gatebox form{display:flex;flex-direction:column;gap:10px}
+.gatebox input[type=password]{font:inherit;font-size:17px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
+.gatebox input[type=password]:focus-visible{outline:3px solid var(--amber);outline-offset:1px}
+.err{color:var(--warn);font-weight:700;font-size:14px;min-height:1.5em}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--muted)}
+.lock{font:inherit;font-size:13px;background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;padding:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="gatebox">
+    <h1>Bier<span>zähler</span></h1>
+    <p>Nur für die Gruppe. Passwort eingeben.</p>
+    <form id="gateform" autocomplete="on">
+      <input type="text" name="username" value="bierzaehler" autocomplete="username" hidden>
+      <input type="password" id="pw" name="password" autocomplete="current-password" placeholder="Passwort" aria-label="Passwort" required>
+      <label class="chk"><input type="checkbox" id="remember" checked> Auf diesem Gerät angemeldet bleiben</label>
+      <button class="btn" type="submit" id="go">Rein da</button>
+      <div class="err" id="err" aria-live="polite"></div>
+    </form>
+  </div>
+</div>
+<div class="wrap" id="app" hidden>
+  <header>
+    <div>
+      <h1>Bier<span>zähler</span></h1>
+      <p class="sub">Das offizielle Scoreboard der Gruppe. Jedes Bierfoto mit Nummer zählt.</p>
+    </div>
+    <button class="lock" id="logout" type="button">Abmelden</button>
+  </header>
+
+  <div class="status" id="status"></div>
+
+  <div class="weekbar">
+    <button class="step" id="prev" type="button" aria-label="Vorherige Woche">‹</button>
+    <div>
+      <div class="weekname" id="weekname">–</div>
+      <div class="weekdates" id="weekdates"></div>
+    </div>
+    <button class="step" id="next" type="button" aria-label="Nächste Woche">›</button>
+  </div>
+
+  <div class="main">
+    <section class="panel">
+      <div class="facts">
+        <div class="fact"><b id="fTotal">0</b><small>Biere diese Woche</small></div>
+        <div class="fact"><b id="fStand">0</b><small>Gruppenstand</small></div>
+        <div class="fact"><b id="fDay">–</b><small id="fDayL">Stärkster Tag</small></div>
+      </div>
+      <div>
+        <h2>Scoreboard</h2>
+      </div>
+      <ol class="board" id="board"></ol>
+      <div>
+        <div class="label">Biere pro Tag</div>
+        <div class="days" id="days"></div>
+      </div>
+      <div id="issuesBox" hidden>
+        <div class="label">Auffällige Nummern</div>
+        <ul class="issues" id="issues"></ul>
+      </div>
+    </section>
+
+  </div>
+
+  <section class="panel">
+    <h2>Gesamtwertung</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>#</th><th>Name</th><th class="num">Biere</th><th class="num">Wochensiege</th><th class="num">Höchste Nr.</th></tr></thead>
+      <tbody id="alltime"></tbody>
+    </table></div>
+  </section>
+  <section class="drop" id="drop">
+    <p><strong>Neue Biere hochladen:</strong> WhatsApp-Export (.txt oder .zip) reinziehen oder auswählen. Gespeichert werden nur Name, Uhrzeit und Bier-Nummer, kein Chat-Text.</p>
+    <div class="actions">
+      <input type="file" id="file" accept=".txt,.zip,text/plain,application/zip" hidden>
+      <button class="btn" id="pick" type="button">Export hochladen</button>
+      <label class="chk"><input type="checkbox" id="replace"> Alte Daten ersetzen</label>
+      <span class="toast" id="toast" aria-live="polite"></span>
+    </div>
+  </section>
+  <details class="howbox">
+    <summary>So exportierst du den Chat</summary>
+    <ol class="how">
+      <li><b>Android:</b> Gruppe öffnen → ⋮ → Mehr → Chat exportieren → <i>Ohne Medien</i>.</li>
+      <li><b>iPhone:</b> Gruppe öffnen → Gruppenname antippen → runterscrollen → Chat exportieren → <i>Ohne Medien</i>.</li>
+      <li>Die Datei hier hochladen. Schon bekannte Biere werden nicht doppelt gezählt.</li>
+      <li>„Alte Daten ersetzen“ nur anhaken, wenn aus Versehen der falsche Chat hochgeladen wurde.</li>
+    </ol>
+  </details>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const WD=["Mo","Di","Mi","Do","Fr","Sa","So"];
+const WDL=["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
+let beers=[], weeks=[], wi=0, source="";
+
+/* ---------- parsing ---------- */
+const PREFIX=/^\[?(\d{1,2})[./](\d{1,2})[./](\d{2,4}),?\s+(\d{1,2}):(\d{2})(?::\d{2})?\]?\s*(?:-\s)?(.*)$/;
+const MEDIA=/<[^>]*(weggelassen|ausgelassen|omitted)[^>]*>|\b(Bild|Foto|image|photo|GIF|Sticker) (weggelassen|omitted)\b|\S+\.(jpe?g|png|webp|heic)\s*\((Datei angehängt|file attached)\)/gi;
+function parseChat(txt){
+  const lines=txt.replace(/\r/g,"").split("\n");
+  const msgs=[]; let cur=null;
+  for(let raw of lines){
+    const line=raw.replace(/[‎‏‪-‮﻿]/g,"");
+    const m=line.match(PREFIX);
+    if(m){
+      let [,d,mo,y,h,mi,rest]=m;
+      y=+y; if(y<100) y+=2000;
+      const date=new Date(y,+mo-1,+d,+h,+mi);
+      const ci=rest.indexOf(": ");
+      if(ci<0){cur=null;continue;}               // Systemnachricht
+      cur={date,sender:rest.slice(0,ci).replace(/^~\s*/,"").trim(),text:rest.slice(ci+2)};
+      msgs.push(cur);
+    } else if(cur){ cur.text+="\n"+line; }
+  }
+  return msgs;
+}
+function toBeers(msgs){
+  const out=[];
+  for(const m of msgs){
+    const hasMedia=MEDIA.test(m.text); MEDIA.lastIndex=0;
+    const clean=m.text.replace(MEDIA," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();
+    const r=clean.match(/^(?:bier\s*)?(?:nr\s*)?(\d{1,5})$/i);
+    if(r && (!onlyMedia || hasMedia)) out.push({date:m.date,sender:m.sender,n:+r[1]});
+  }
+  return out.sort((a,b)=>a.date-b.date);
+}
+const onlyMedia=false;
+
+/* ---------- weeks ---------- */
+function monday(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());const wd=(x.getDay()+6)%7;x.setDate(x.getDate()-wd);return x;}
+function isoWeek(d){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const day=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-day);const y=new Date(Date.UTC(t.getUTCFullYear(),0,1));return Math.ceil(((t-y)/864e5+1)/7);}
+const fmt=d=>String(d.getDate()).padStart(2,"0")+"."+String(d.getMonth()+1).padStart(2,"0")+".";
+function buildWeeks(){
+  if(!beers.length) return [];
+  const first=monday(beers[0].date), last=monday(beers[beers.length-1].date), res=[];
+  for(let w=new Date(first); w<=last; w.setDate(w.getDate()+7)){
+    const start=new Date(w), end=new Date(w); end.setDate(end.getDate()+7);
+    res.push({start,end,list:beers.filter(b=>b.date>=start&&b.date<end)});
+  }
+  return res;
+}
+function ranking(list){
+  const c={}; list.forEach(b=>c[b.sender]=(c[b.sender]||0)+1);
+  const arr=Object.entries(c).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));
+  let rank=0,prev=null; arr.forEach((p,i)=>{if(p.count!==prev){rank=i+1;prev=p.count;}p.rank=rank;});
+  return arr;
+}
+function issuesFor(list,allBefore){
+  const res=[], seen={};
+  allBefore.forEach(b=>{(seen[b.n]=seen[b.n]||[]).push(b);});
+  list.forEach(b=>{ if(seen[b.n] && seen[b.n].length>1 && seen[b.n].includes(b) && seen[b.n][0]!==b) res.push(`Nr. ${b.n} doppelt (${seen[b.n].map(x=>x.sender).join(" & ")})`); });
+  const ns=[...new Set(list.map(b=>b.n))].sort((a,b)=>a-b);
+  const prevMax=Math.max(0,...allBefore.filter(b=>!list.includes(b)).map(b=>b.n));
+  let last=prevMax;
+  ns.forEach(n=>{ if(last && n>last+1) res.push(n-last===2?`Nr. ${last+1} fehlt`:`Nr. ${last+1}–${n-1} fehlen`); last=Math.max(last,n); });
+  return [...new Set(res)];
+}
+
+/* ---------- render ---------- */
+function render(){
+  const has=weeks.length>0;
+  $("prev").disabled=!has||wi<=0; $("next").disabled=!has||wi>=weeks.length-1;
+  if(!has){ $("weekname").textContent="Noch keine Biere"; $("weekdates").textContent=""; $("board").innerHTML='<li class="empty">Hier steht bald, wer am meisten wegzischt. Unten einen Chat-Export reinziehen.</li>'; $("alltime").innerHTML=""; $("days").innerHTML=""; $("issuesBox").hidden=true; ["fTotal","fStand"].forEach(i=>$(i).textContent="0"); $("fDay").textContent="–"; return; }
+  const w=weeks[wi], kw=isoWeek(w.start), endDay=new Date(w.end); endDay.setDate(endDay.getDate()-1);
+  $("weekname").textContent="KW "+kw;
+  $("weekdates").textContent=fmt(w.start)+" – "+fmt(endDay)+endDay.getFullYear();
+  const rank=ranking(w.list), max=rank[0]?.count||1;
+  const upto=beers.filter(b=>b.date<w.end);
+  const stand=upto.length?Math.max(...upto.map(b=>b.n)):0;
+  const perDay=[0,0,0,0,0,0,0]; w.list.forEach(b=>perDay[(b.date.getDay()+6)%7]++);
+  const best=perDay.indexOf(Math.max(...perDay));
+  $("fTotal").textContent=w.list.length;
+  $("fStand").textContent=stand;
+  $("fDay").textContent=w.list.length?WD[best]:"–";
+  $("fDayL").textContent=w.list.length?`Stärkster Tag (${perDay[best]})`:"Stärkster Tag";
+  $("board").innerHTML=rank.length?rank.map(p=>`<li class="row r${p.rank}"><span class="rank">${p.rank}</span><div class="who"><div class="n">${esc(p.name)}</div><div class="track"><div class="fill" style="width:${(p.count/max*100).toFixed(1)}%"></div></div></div><span class="cnt">${p.count}</span></li>`).join(""):'<li class="empty">Diese Woche wurde nichts getrunken. Bedenklich.</li>';
+  const dmax=Math.max(1,...perDay);
+  $("days").innerHTML=perDay.map((v,i)=>`<div class="day"><span class="v">${v||""}</span><div class="bar${v?"":" zero"}" style="height:${(v/dmax*60).toFixed(0)}px"></div><small>${WD[i]}</small></div>`).join("");
+  const iss=issuesFor(w.list,upto);
+  $("issuesBox").hidden=!iss.length; $("issues").innerHTML=iss.map(s=>`<li>${esc(s)}</li>`).join("");
+
+  // all-time
+  const all=ranking(beers), wins={};
+  weeks.forEach(x=>ranking(x.list).filter(p=>p.rank===1).forEach(p=>wins[p.name]=(wins[p.name]||0)+1));
+  const hi={}; beers.forEach(b=>hi[b.sender]=Math.max(hi[b.sender]||0,b.n));
+  $("alltime").innerHTML=all.map(p=>`<tr><td>${p.rank}</td><td>${esc(p.name)}</td><td class="num">${p.count}</td><td class="num">${wins[p.name]||0}</td><td class="num">${hi[p.name]}</td></tr>`).join("");
+
+}
+function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+function setBeers(list,pill,label){
+  beers=list.sort((a,b)=>a.date-b.date); weeks=buildWeeks(); wi=Math.max(0,weeks.length-1); source=label;
+  const people=new Set(beers.map(b=>b.sender)).size;
+  $("status").innerHTML=`<span class="pill">${pill}</span> <span>${esc(label)} · ${beers.length} Biere · ${people} Leute · ${weeks.length} Woche${weeks.length===1?"":"n"}</span>`;
+  render();
+}
+/* Daten liegen im Netlify-Speicher, Zugriff über /api/daten mit Passwort */
+const pad=x=>String(x).padStart(2,"0");
+const stamp=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const unstamp=s=>{const [a,b]=s.split("T");const [y,m,d]=a.split("-").map(Number);const [h,mi]=b.split(":").map(Number);return new Date(y,m-1,d,h,mi);};
+const PWKEY="bierzaehler-pw";
+const norm=p=>p.trim().normalize("NFC").toLowerCase();
+let PW=null;
+async function api(method,body,pw=PW){
+  const r=await fetch("/api/daten",{method,cache:"no-store",headers:{"x-bier-pw":encodeURIComponent(pw),"content-type":"application/json"},body:body?JSON.stringify(body):undefined});
+  if(r.status===401) return {auth:false};
+  if(!r.ok) throw new Error((await r.json().catch(()=>({}))).error||`Server-Fehler ${r.status}`);
+  return {auth:true,data:await r.json()};
+}
+function show(data){
+  const list=(data.biere||[]).map(b=>({date:unstamp(b.t),sender:b.name,n:+b.nr}));
+  if(!data.stand){ setBeers(list,"Noch leer","Noch keine Daten. Unten den ersten Chat-Export hochladen."); return; }
+  const st=new Date(data.stand);
+  setBeers(list,"Live",`Stand ${fmt(st)}${st.getFullYear()}, ${pad(st.getHours())}:${pad(st.getMinutes())} Uhr`);
+}
+async function unlock(raw,remember){
+  const pw=norm(raw);
+  const res=await api("GET",null,pw);
+  if(!res.auth) return false;
+  PW=pw;
+  if(remember){ try{localStorage.setItem(PWKEY,pw);}catch(e){} }
+  $("gate").hidden=true; $("app").hidden=false;
+  show(res.data);
+  return true;
+}
+$("gateform").addEventListener("submit",async e=>{
+  e.preventDefault(); $("err").textContent=""; $("go").disabled=true; $("go").textContent="Prüfe …";
+  let ok=false;
+  try{ ok=await unlock($("pw").value,$("remember").checked); if(!ok) $("err").textContent="Falsches Passwort. Frag in der Gruppe nach."; }
+  catch(err){ $("err").textContent="Server nicht erreichbar. Später nochmal probieren."; }
+  $("go").disabled=false; $("go").textContent="Rein da";
+  if(!ok) $("pw").select();
+});
+$("logout").onclick=()=>{ try{localStorage.removeItem(PWKEY);}catch(e){} location.reload(); };
+async function upload(text,name){
+  const found=toBeers(parseChat(text));
+  if(!found.length) throw new Error(`In „${name}“ wurde keine Bier-Nummer gefunden. Ist das der richtige Chat?`);
+  $("toast").textContent="Lade hoch …";
+  const replace=$("replace").checked;
+  const res=await api("POST",{mode:replace?"replace":"merge",biere:found.map(b=>({t:stamp(b.date),name:b.sender,nr:b.n}))});
+  if(!res.auth){ $("logout").click(); return; }
+  show(res.data); $("replace").checked=false;
+  const neu=res.data.neu;
+  $("toast").textContent=replace?`Ersetzt: ${found.length} Biere gespeichert.`:neu>0?`${neu} neue${neu===1?"s":""} Bier${neu===1?"":"e"} gespeichert.`:"Schon alles drin, nichts Neues.";
+}
+async function handleFile(f){
+  try{
+    let text;
+    if(/\.zip$/i.test(f.name)||f.type.includes("zip")){
+      if(!window.JSZip) throw new Error("ZIP-Unterstützung nicht geladen. Bitte die .txt aus dem ZIP entpacken und die reinziehen.");
+      const zip=await JSZip.loadAsync(f);
+      const entry=Object.values(zip.files).find(e=>!e.dir&&/\.txt$/i.test(e.name));
+      if(!entry) throw new Error("Im ZIP ist keine .txt-Datei. Bitte beim Export „Ohne Medien“ wählen.");
+      text=await entry.async("string");
+    } else text=await f.text();
+    await upload(text,f.name);
+  }catch(e){ $("toast").textContent=""; $("status").innerHTML=`<span class="pill warn">Fehler</span> <span>${esc(e.message||String(e))}</span>`; }
+}
+
+/* ---------- events ---------- */
+$("pick").onclick=()=>$("file").click();
+$("file").onchange=e=>{if(e.target.files[0]) handleFile(e.target.files[0]);};
+$("prev").onclick=()=>{if(wi>0){wi--;render();}};
+$("next").onclick=()=>{if(wi<weeks.length-1){wi++;render();}};
+const drop=$("drop");
+["dragenter","dragover"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();if(ev==="drop"||e.target===document.documentElement)drop.classList.remove("over");}));
+document.addEventListener("drop",e=>{if(!PW)return;const f=e.dataTransfer?.files?.[0]; if(f) handleFile(f);});
+(async()=>{ let saved=null; try{saved=localStorage.getItem(PWKEY);}catch(e){}
+  if(saved){ if(await unlock(saved,true)) return; try{localStorage.removeItem(PWKEY);}catch(e){} }
+  $("pw").focus(); })().catch(()=>{$("pw").focus();});
+})();
+</script>
+</body>
+</html>
